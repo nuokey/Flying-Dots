@@ -1,104 +1,137 @@
-const Application = PIXI.Application, loader = PIXI.Loader.shared, resources = PIXI.Loader.shared.resources, Sprite = PIXI.Sprite;
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
 
-const app = new PIXI.Application({width: 800, height: 800, antialias: true, transparent: false, resolution: 1});
-let type = "WebGL";
-if (!PIXI.utils.isWebGLSupported()) {
-    type = "canvas";
-}
+const title = document.getElementById("title");
 
-objects = []
+const score = document.getElementById("score");
 
-document.body.appendChild(app.view);
+let animationId;
+let pastTime;
 
-PIXI.Loader.shared
-  .add(["dot.png"])
-  .load(setup);
+let wind = 0.5;
+let gravity = 1;
 
-function createObject(sprite, x, y, speedX, speedY) {
-	elem = new PIXI.Sprite(PIXI.Loader.shared.resources[sprite].texture)
-	elem.y = y;
-	elem.x = x;
-	elem.speedX = speedX;
-	elem.speedY = speedY;
-	elem.width = 5;
-	elem.height = 5;
-	elem.rotationSpeed = 0;
-	elem.anchor.set(0.5);
+let x = 0;
+let y = 0;
 
-    elem.links = [];
-	
-	app.stage.addChild(elem);
-	objects.push(elem);
+let objects = []
 
-	console.log("Setup done");
+let spawnTick = 30;
+let tick = 0;
+
+for (let i = 0; i < 50; i++) {
+    objects.push([getRandomArbitrary(0, canvas.width), getRandomArbitrary(0, canvas.height), getRandomArbitrary(0, 1), getRandomArbitrary(-0.5, 0.5)]);
 }
 
 
-function setup() {
-    createObject("dot.png", getRandomInt(0, 800), getRandomInt(0, 800), getRandomInt(0.1, 1), getRandomInt(-0.1, 0.1));
+window.onload = startAnimation;
+
+
+function startAnimation() {
+	frame();
+	pastTime = 0;
 }
 
-document.addEventListener("mousemove", (e) => {
-    x = e.offsetX;
-    y = e.offsetY;
-})
+function frame() {
+	animationId = requestAnimationFrame(frame);
 
-document.addEventListener("click", (e) => {
-    createObject("dot.png", x, y, getRandomInt(1, 2), getRandomInt(-1, 1));
-})
+	let time = Date.now();
+	let delta = time - pastTime;
+	let fps = Math.floor(1000 / delta);
 
-function gameLoop() {
-    requestAnimationFrame(gameLoop);
- 
-    objects.forEach(e => {
-        e.x += e.speedX;
-        e.y += e.speedY;
+	if (fps <= 60) {
+		draw();
+		pastTime = Date.now();
+	}
+}
 
-        objects.forEach(o => {
-            if (e != o && Math.sqrt((e.x - o.x)**2 + (e.y - o.y)**2) < 100 && !e.links.includes(o)) {
-                const line = new PIXI.Graphics();
-                line.lineStyle(1, 0xd5402b, 1);
-                line.x = e.x;
-                line.y = e.y;
-                line.moveTo(0, 0);
-                line.lineTo(o.x, o.y);
+function draw() {
+	ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "black";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-                app.stage.addChild(line);
+    tick += 1;
 
-                e.links.push(line)
+    if (tick >= spawnTick) {
+        objects.push([getRandomArbitrary(0, canvas.width), getRandomArbitrary(0, canvas.height), getRandomArbitrary(0, 1), getRandomArbitrary(-0.5, 0.5)]);
+        tick = 0;
+    }
+
+    
+    objects.forEach(o => {
+        o[0] += o[2];
+        o[1] += o[3];
+        ctx.fillStyle = "white";
+        ctx.fillRect(o[0], o[1], 4, 4);
+
+        if (Math.sqrt((o[0] - x)**2 + (o[1] - y)**2) < 150) {
+            ctx.strokeStyle = `rgba(255,255,255,${1 / Math.sqrt((o[0] - x)**2 + (o[1] - y)**2) * 50})`;
+            ctx.beginPath();
+            ctx.moveTo(o[0], o[1]);
+            ctx.lineTo(x, y);
+
+            ctx.stroke();
+        }
+
+        objects.forEach(s => {
+            if (Math.sqrt((o[0] - s[0])**2 + (o[1] - s[1])**2) < 150) {
+                ctx.strokeStyle = `rgba(255,255,255,${1 / Math.sqrt((o[0] - s[0])**2 + (o[1] - s[1])**2) * 50})`;
+                ctx.beginPath();
+                ctx.moveTo(o[0], o[1]);
+                ctx.lineTo(s[0], s[1]);
+
+                ctx.stroke();
             }
         });
     });
 }
 
+canvas.addEventListener('mousemove', function(event) {
+    const rect = canvas.getBoundingClientRect();
+    x = event.clientX - rect.left;
+    y = event.clientY - rect.top;
+});
 
+canvas.addEventListener('mousedown', function(event) {
+    const rect = canvas.getBoundingClientRect();
+    x = event.clientX - rect.left;
+    y = event.clientY - rect.top;
+    if (event.buttons == 1) {
+        objects.push([x, y, getRandomArbitrary(0, 1), getRandomArbitrary(-0.5, 0.5)]);
+    }
+    else if (event.buttons == 2) {
+        
+        objects.forEach(e => {
+            distance = Math.sqrt((e[0] - x)**2 + (e[1] - y)**2);
+            force = 10000 / (distance ** 2)
 
-gameLoop();
+            sin = (e[1] - y) / distance;
+            cos = (e[0] - x) / distance;
+            e[3] += sin * force;
+            e[2] += cos * force;
+        });
+    }
+});
 
-function getRandomInt(min, max) {
-    min = Math.ceil(min);
-    max = Math.floor(max);
-    return Math.floor(Math.random() * (max - min)) + min;
-}
+document.addEventListener('keydown', function (event) {
+    if (event.key == "ArrowUp") {
+        gravity -= 0.1;
+    }
+    if (event.key == "ArrowDown") {
+        gravity += 0.1;
+    }
+    if (event.key == "ArrowRight") {
+        wind += 0.1;
+    }
+    if (event.key == "ArrowLeft") {
+        wind -= 0.1;
+    }
+})
 
-function clipInput(k, arr) {
-    if (k < 0) k = 0;
-    if (k > arr.length - 1) k = arr.length - 1;
-    return arr[k];
-}
+function getRandomInt(max) {
+    return Math.floor(Math.random() * max);
+  }
 
-function getTangent(k, factor, array) {
-    return factor * (clipInput(k + 1, array) - clipInput(k - 1, array)) / 2;
-}
-
-function cubicInterpolation(array, t, tangentFactor) {
-    if (tangentFactor == null) tangentFactor = 1;
-
-    const k = Math.floor(t);
-    const m = [getTangent(k, tangentFactor, array), getTangent(k + 1, tangentFactor, array)];
-    const p = [clipInput(k, array), clipInput(k + 1, array)];
-    t -= k;
-    const t2 = t * t;
-    const t3 = t * t2;
-    return (2 * t3 - 3 * t2 + 1) * p[0] + (t3 - 2 * t2 + t) * m[0] + (-2 * t3 + 3 * t2) * p[1] + (t3 - t2) * m[1];
-}
+  function getRandomArbitrary(min, max) {
+    return Math.random() * (max - min) + min;
+  }
